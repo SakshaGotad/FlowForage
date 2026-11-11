@@ -1,15 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { StorageService } from './database.service';
+import { DatabaseService } from './database.service';
 
-describe('StorageService', () => {
-  let service: StorageService;
+describe('DatabaseService', () => {
+  let service: DatabaseService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [StorageService],
+      providers: [
+        {
+          provide: DatabaseService,
+          useValue: {
+            query: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
-    service = module.get<StorageService>(StorageService);
+    service = module.get<DatabaseService>(DatabaseService);
   });
 
   it('should be defined', () => {

@@ -1,23 +1,28 @@
+// Re-export evolved interface types from the canonical location
+export * from './interfaces/workflow.interface.js';
+
+// Backward compatibility types for code being transitioned in Phase 3
 export enum TriggerType {
   EVENT = 'event',
   CRON = 'cron',
 }
-export interface WorkflowStep {
+
+export interface LegacyWorkflowStep {
   delay?: number;
   id: string;
   handler?: (payload: any) => Promise<any>;
-    retry?: {
+  retry?: {
     attempts: number;
-    backoff: number; // base delay in ms
+    backoff: number;
   };
 }
 
-export interface WorkflowDefinition {
+export interface LegacyWorkflowDefinition {
   name: string;
-   trigger?: {
-     type: TriggerType;
+  trigger?: {
+    type: TriggerType;
     event: string;
     cron?: string;
   };
-  steps: WorkflowStep[];
+  steps: LegacyWorkflowStep[];
 }

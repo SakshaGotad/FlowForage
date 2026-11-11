@@ -7,29 +7,151 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Workflow {
+// ---------------------------------------------------------------------------
+// User & Multi-tenancy
+// ---------------------------------------------------------------------------
+
+model User {
   id           String   @id @default(uuid())
-  name         String
-  triggerType  String
-  triggerValue String
-  stepsJson    Json
-  isActive     Boolean  @default(true)
-
+  email        String   @unique
+  passwordHash String
+  name         String?
   createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  runs         WorkflowRun[]
+  connections  Connection[]
+  workflows    Workflow[]
+
+  @@map("users")
 }
 
+// ---------------------------------------------------------------------------
+// Connection Management
+// ---------------------------------------------------------------------------
+
+model Connection {
+  id                     String    @id @default(uuid())
+  userId                 String
+  provider               String    // 'github', 'slack', 'discord', 'linear', 'todoist', 'notion'
+  displayName            String    // User-assigned label (e.g., 'Work GitHub')
+  status                 String    @default("active") // active, expired, refresh_failed, revoked, error
+  grantedScopes          String[]  @default([])
+  externalAccountId      String    // Provider-side ID (username, teamId, guildId)
+  externalDisplayName    String?   // External label (e.g. 'acme-org')
+  isWorkspaceConnection  Boolean   @default(false)
+
+  // AES-256-GCM encrypted blob: { accessToken, refreshToken, expiresAt, metadata }
+  // NEVER exposed in API responses or logs
+  encryptedCredentials   String
+
+  tokenExpiresAt         DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([provider, externalAccountId])
+  @@index([userId, provider])
+  @@map("connections")
+}
+
+// ---------------------------------------------------------------------------
+// Workflow Definitions (Serializable, No function references)
+// ---------------------------------------------------------------------------
+
+model Workflow {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  status      String   @default("draft") // draft, active, paused
+  version     Int      @default(1)
+
+  // Trigger configuration: { provider, operationKey, connectionId?, config?, cronExpression? }
+  triggerJson Json
+
+  // Steps configuration: [{ id, provider, operationKey, connectionId, inputMapping, delay?, retry? }]
+  stepsJson   Json
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs        WorkflowRun[]
+
+  @@index([userId])
+  @@map("workflows")
+}
+
+// ---------------------------------------------------------------------------
+// Execution History
+// ---------------------------------------------------------------------------
+
 model WorkflowRun {
-  id               String   @id @default(uuid())
-  workflowId       String
-  workflow         Workflow @relation(fields: [workflowId], references: [id])
+  id               String    @id @default(uuid())
+  workflowId       String?
+  workflowVersion  Int       @default(1) // Snapshot of version when run started
+  workflowName     String
+  status           String    @default("running") // running, completed, failed, delayed
+  currentStepIndex Int       @default(0)
 
-  status           String
-  currentStepIndex Int      @default(0)
+  // Initial trigger event payload
+  triggerPayload   Json?
 
-  payload          Json?
+  // Accumulated step outputs: { [stepId]: { output: ... } }
+  contextJson      Json?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  error            String?
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  workflow         Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepRuns         StepRun[]
+
+  @@index([workflowId])
+  @@index([status])
+  @@map("workflow_runs")
+}
+
+model StepRun {
+  id            String    @id @default(uuid())
+  workflowRunId String
+  stepId        String    // Matches step.id from workflow definition
+  status        String    @default("pending") // pending, running, completed, failed, skipped
+  attempts      Int       @default(0)
+  inputData     Json?     // Resolved input after field mapping
+  outputData    Json?     // Result returned by provider adapter
+  errorMessage  String?
+  errorCode     String?
+  durationMs    Int?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@index([workflowRunId, stepId])
+  @@map("step_runs")
+}
+
+// ---------------------------------------------------------------------------
+// Event Ingestion & Idempotency
+// ---------------------------------------------------------------------------
+
+model TriggerEvent {
+  id                String   @id @default(uuid())
+  provider          String
+  externalEventId   String   // Provider delivery/event ID for deduplication
+  triggerKey        String
+  externalAccountId String
+  payload           Json
+  processed         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, externalEventId])
+  @@index([provider, triggerKey])
+  @@map("trigger_events")
 }
