@@ -10,6 +10,7 @@ import { ConnectionsModule } from './connections/connections.module';
 import { AuthModule } from './auth/auth.module';
 import { RegistryModule } from './registry/registry.module';
 import { ProvidersModule } from './providers/providers.module';
+import { IngestionModule } from './ingestion/ingestion.module';
 import { createWorker } from './queue/worker';
 import { ExecutorService } from './executor/executor.service';
 import { WorkflowRunRepository } from './storage/workflow-run.repository';
@@ -26,6 +27,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuthModule,
     RegistryModule,
     ProvidersModule,
+    IngestionModule,
     ScheduleModule.forRoot(),
   ],
   providers: [CoreService, WorkflowService],
@@ -39,6 +41,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     QueueModule,
     RegistryModule,
     ProvidersModule,
+    IngestionModule,
   ],
 })
 export class FlowForageModule implements OnModuleInit {
