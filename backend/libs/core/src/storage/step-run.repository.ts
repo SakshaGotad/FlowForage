@@ -1,78 +1,101 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseService } from './database.service';
+import { PrismaService } from './prisma.service';
 
 @Injectable()
 export class StepRunRepository {
-  constructor(private db: DatabaseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(runId: string, stepId: string) {
-    await this.db.query(
-      `
-      INSERT INTO eventbridge_step_runs (workflow_run_id, step_id, status, attempts)
-      VALUES ($1, $2, $3)
-      `,
-      [runId, stepId, 'running', 0],
-    ); 
+  async create(runId: string, stepId: string, inputData?: any) {
+    return this.prisma.stepRun.create({
+      data: {
+        workflowRunId: runId,
+        stepId,
+        status: 'running',
+        attempts: 0,
+        startedAt: new Date(),
+        inputData: inputData ?? null,
+      },
+    });
   }
 
   async getStepsByRunId(runId: string) {
-  const result = await this.db.query(
-    `
-    SELECT step_id, status, attempts, updated_at
-    FROM eventbridge_step_runs
-    WHERE workflow_run_id = $1
-    ORDER BY updated_at ASC
-    `,
-    [runId],
-  );
+    return this.prisma.stepRun.findMany({
+      where: { workflowRunId: runId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
 
-  return result.rows;
-}
   async incrementAttempts(runId: string, stepId: string) {
-    await this.db.query(
-      `
-    UPDATE eventbridge_step_runs
-    SET attempts = attempts + 1
-    WHERE workflow_run_id = $1 AND step_id = $2
-    `,
-      [runId, stepId],
-    );
+    const existing = await this.prisma.stepRun.findFirst({
+      where: { workflowRunId: runId, stepId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existing) {
+      return this.prisma.stepRun.update({
+        where: { id: existing.id },
+        data: {
+          attempts: existing.attempts + 1,
+        },
+      });
+    }
   }
 
-  async markFailed(runId: string, stepId: string) {
-    await this.db.query(
-      `
-    UPDATE eventbridge_step_runs
-    SET status = 'failed', updated_at= NOW()
-    WHERE workflow_run_id = $1 AND step_id = $2
-    `,
-      [runId, stepId],
-    );
+  async complete(
+    runId: string,
+    stepId: string,
+    outputData?: any,
+    durationMs?: number,
+  ) {
+    const existing = await this.prisma.stepRun.findFirst({
+      where: { workflowRunId: runId, stepId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existing) {
+      return this.prisma.stepRun.update({
+        where: { id: existing.id },
+        data: {
+          status: 'completed',
+          outputData: outputData ?? null,
+          durationMs: durationMs ?? null,
+          completedAt: new Date(),
+        },
+      });
+    }
   }
-  async complete(runId: string, stepId: string) {
-    await this.db.query(
-      `
-      UPDATE eventbridge_step_runs
-      SET status = 'completed', updated_at = NOW()
-      WHERE workflow_run_id = $1 AND step_id = $2
-      `,
-      [runId, stepId],
-    );
+
+  async markFailed(
+    runId: string,
+    stepId: string,
+    errorMessage?: string,
+    errorCode?: string,
+  ) {
+    const existing = await this.prisma.stepRun.findFirst({
+      where: { workflowRunId: runId, stepId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existing) {
+      return this.prisma.stepRun.update({
+        where: { id: existing.id },
+        data: {
+          status: 'failed',
+          errorMessage: errorMessage || 'Step execution failed',
+          errorCode: errorCode || null,
+          completedAt: new Date(),
+        },
+      });
+    }
   }
 
   async getFailedStep(runId: string) {
-  const result = await this.db.query(
-    `
-    SELECT step_id
-    FROM eventbridge_step_runs
-    WHERE workflow_run_id = $1
-      AND status = 'failed'
-    ORDER BY updated_at DESC
-    LIMIT 1
-    `,
-    [runId],
-  );
-
-  return result.rows[0] || null;
-}
+    return this.prisma.stepRun.findFirst({
+      where: {
+        workflowRunId: runId,
+        status: 'failed',
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
 }

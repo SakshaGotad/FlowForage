@@ -9,14 +9,17 @@ export function createWorker(
   workflowService: WorkflowService,
   workflowRunRepo: WorkflowRunRepository,
 ) {
+  if (!process.env.REDIS_URL) {
+    console.warn('REDIS_URL not set; skipping worker initialization.');
+    return null;
+  }
 
   const worker = new Worker(
     'eventbridge-workflow',
     async (job) => {
+      const { workflowName, payload, runId, stepIndex = 0 } = job.data;
 
-      const { workflowName, payload, runId, stepIndex=0 } = job.data;
-
-      console.log('Worker received job:', workflowName);
+      console.log('Worker received job:', workflowName, 'runId:', runId);
 
       const workflow = workflowService.getWorkflow(workflowName);
 
@@ -26,24 +29,18 @@ export function createWorker(
 
       try {
         await executor.runWorkflow(workflow, payload, runId, stepIndex);
-
-        // await workflowRunRepo.complete(runId);
-
+        await workflowRunRepo.complete(runId);
       } catch (error) {
-
         console.error('Worker execution failed:', error);
-
-        await workflowRunRepo.markFailed(runId);
-
+        await workflowRunRepo.markFailed(runId, error?.message);
         throw error;
-      } 
-
+      }
     },
     {
       connection: {
-        url: process.env.REDIS_URL!,
+        url: process.env.REDIS_URL,
       },
-    }
+    },
   );
 
   return worker;
