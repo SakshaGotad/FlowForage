@@ -1,4 +1,4 @@
-# 🚀 EventBridge Workflow Engine
+# 🚀 FlowForage
 
 A scalable, queue-based workflow automation engine built using **NestJS**, **BullMQ**, **PostgreSQL**, and **Redis**. This project is inspired by systems like Zapier and AWS EventBridge, enabling asynchronous event-driven workflows.
 
