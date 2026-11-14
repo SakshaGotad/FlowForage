@@ -37,6 +37,12 @@ export class WebhookController {
     const providerKey = provider.toLowerCase();
     this.logger.log(`Received webhook request for provider: ${providerKey}`);
 
+    // Fast return for Slack url_verification challenge
+    if (providerKey === 'slack' && body && body.type === 'url_verification') {
+      this.logger.log('Responding to Slack url_verification challenge');
+      return { challenge: body.challenge };
+    }
+
     // 1. Locate provider adapter
     const adapter = this.adapterRegistry.get(providerKey);
     if (!adapter) {
