@@ -104,7 +104,7 @@ export class ExecutorService {
                 stepResult.error?.message || `Step ${step.id} action failed`;
               const errorCode = stepResult.error?.code || 'ACTION_ERROR';
 
-              // If marked not retryable, fail immediately
+              // If marked not retryable, fail immediately without retrying
               if (stepResult.error && !stepResult.error.retryable) {
                 await this.stepRunRepository.markFailed(
                   runId,
@@ -112,7 +112,9 @@ export class ExecutorService {
                   errorMessage,
                   errorCode,
                 );
-                throw new Error(errorMessage);
+                const nonRetryableErr = new Error(errorMessage);
+                (nonRetryableErr as any).isNonRetryable = true;
+                throw nonRetryableErr;
               }
 
               throw new Error(errorMessage);
@@ -148,12 +150,15 @@ export class ExecutorService {
         } catch (error) {
           this.logger.error(`Step ${step.id} attempt ${attempts} failed:`, error.message);
 
-          if (attempts >= maxAttempts) {
+          if ((error as any).isNonRetryable || attempts >= maxAttempts) {
             await this.stepRunRepository.markFailed(
               runId,
               step.id,
               error.message,
             );
+            if ((error as any).isNonRetryable) {
+              throw error;
+            }
             throw new Error(
               `Step ${step.id} failed after ${maxAttempts} attempts: ${error.message}`,
             );

@@ -31,7 +31,7 @@ export class WebhookController {
   async handleWebhook(
     @Param('provider') provider: string,
     @Headers() headers: Record<string, string>,
-    @Req() req: Request,
+    @Req() req: any,
     @Body() body: any,
   ) {
     const providerKey = provider.toLowerCase();

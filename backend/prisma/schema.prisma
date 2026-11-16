@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------
@@ -14,8 +13,10 @@ datasource db {
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
-  passwordHash String
+  passwordHash String?  // Optional for Google OAuth users
   name         String?
+  avatarUrl    String?
+  authProvider String   @default("local") // 'local' or 'google'
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
