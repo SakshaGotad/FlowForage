@@ -122,9 +122,12 @@ async getRunSteps(runId: string) {
     );
 
     // 4️⃣ Requeue from failed step
+    const payload = (run as any).triggerPayload || (run as any).payload || {};
+    await this.workflowRunRepository.updateCurrentStep(runId, stepIndex);
+
     await this.queueService.addWorkflowJob({
       workflowName: run.workflowName,
-      payload: run.payload,
+      payload,
       runId,
       stepIndex,
     });

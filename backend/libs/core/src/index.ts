@@ -15,6 +15,7 @@ export * from './auth/auth.service';
 export * from './registry/registry.module';
 export * from './registry/integration.registry';
 export * from './registry/operation.registry';
+export * from './registry/registry.controller';
 export * from './providers/providers.module';
 export * from './providers/adapter.registry';
 export * from './providers/base-provider.adapter';
